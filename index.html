@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>星球之战</title>
     <style>
         body {
@@ -131,6 +132,61 @@
             background: rgba(255, 255, 255, 0.2);
             cursor: not-allowed;
         }
+        .touch-controls {
+            display: none;
+            justify-content: space-between;
+            align-items: stretch;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .touch-controls .ctrl-btn {
+            flex: 1;
+            padding: 14px 0;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #764ba2, #ffd700);
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            transition: transform 0.1s;
+        }
+        .touch-controls .ctrl-btn:active {
+            transform: scale(0.94);
+        }
+        .touch-controls .fire-btn {
+            flex: 1.2;
+        }
+        @media (pointer: coarse), (max-width: 768px) {
+            .touch-controls { display: flex; }
+        }
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .container {
+                padding: 20px;
+                margin: 20px auto;
+                border-radius: 16px;
+            }
+            .navbar {
+                flex-wrap: wrap;
+                padding: 12px;
+                border-radius: 12px;
+            }
+            .nav-links {
+                flex-wrap: wrap;
+                gap: 10px;
+                margin: 10px 0 0 0;
+                width: 100%;
+            }
+            .weapons { flex-direction: column; }
+            .skills button { padding: 12px 4px; font-size: 14px; }
+            h1 { font-size: 26px; }
+            h2 { font-size: 20px; }
+            #game { height: 280px; }
+        }
     </style>
 </head>
 <body>
@@ -182,7 +238,12 @@
         <button id="skill2" onclick="useSkill(2)">💥 清屏冲击</button>
         <button id="skill3" onclick="useSkill(3)">❤️ 紧急修复</button>
     </div>
-    <p id="gameMsg">按 ← → 移动飞船，按 空格 发射激光，点击按钮释放技能！</p>
+    <div class="touch-controls" id="touchControls">
+        <button class="ctrl-btn" id="btnLeft">◀ 左移</button>
+        <button class="ctrl-btn" id="btnRight">右移 ▶</button>
+        <button class="ctrl-btn fire-btn" id="btnFire">🔫 发射</button>
+    </div>
+    <p id="gameMsg">← → 移动飞船，空格 发射激光，点击按钮释放技能！手机点下方按键即可操控。</p>
     <h2>⚔️ 武器库</h2>
     <div class="weapons">
         <div class="weapon-card">⚔️ 激光剑<br>一剑划破星河</div>
@@ -249,16 +310,57 @@
 
         document.addEventListener('keydown', function (e) {
             if (gameOver) return;
-            if (e.key === 'ArrowLeft') shipX = Math.max(5, shipX - 5);
-            if (e.key === 'ArrowRight') shipX = Math.min(95, shipX + 5);
+            if (e.key === 'ArrowLeft') moveShip(-5);
+            if (e.key === 'ArrowRight') moveShip(5);
             if (e.key === ' ') {
                 e.preventDefault();
                 fire();
             }
+        });
+
+        function moveShip(delta) {
+            if (gameOver) return;
+            shipX = Math.max(5, Math.min(95, shipX + delta));
             ship.style.left = shipX + '%';
+        }
+
+        // ===== 触屏控制（手机端虚拟按键） =====
+        function holdMove(delta) {
+            let timer = null;
+            function start() {
+                if (timer !== null) return;
+                moveShip(delta);
+                timer = setInterval(function () { moveShip(delta); }, 60);
+            }
+            function stop() {
+                if (timer !== null) {
+                    clearInterval(timer);
+                    timer = null;
+                }
+            }
+            return { start: start, stop: stop };
+        }
+        function bindHold(btn, hold) {
+            btn.addEventListener('pointerdown', function (e) {
+                e.preventDefault();
+                hold.start();
+            });
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evt) {
+                btn.addEventListener(evt, hold.stop);
+            });
+        }
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+        const btnFire = document.getElementById('btnFire');
+        bindHold(btnLeft, holdMove(-5));
+        bindHold(btnRight, holdMove(5));
+        btnFire.addEventListener('pointerdown', function (e) {
+            e.preventDefault();
+            fire();
         });
 
         function fire() {
+            if (gameOver) return;
             const laser = document.createElement('div');
             laser.className = 'laser';
             laser.style.left = shipX + '%';
