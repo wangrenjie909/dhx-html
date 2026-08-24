@@ -2,7 +2,6 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>星球之战</title>
     <style>
         body {
@@ -98,6 +97,7 @@
             bottom: 10px;
             left: 50%;
             font-size: 36px;
+            transition: transform 0.15s, left 0.05s, bottom 0.05s;
         }
         .alien {
             position: absolute;
@@ -132,60 +132,27 @@
             background: rgba(255, 255, 255, 0.2);
             cursor: not-allowed;
         }
-        .touch-controls {
-            display: none;
-            justify-content: space-between;
-            align-items: stretch;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .touch-controls .ctrl-btn {
-            flex: 1;
-            padding: 14px 0;
-            border: none;
-            border-radius: 12px;
+        .planet-toggle {
             background: linear-gradient(90deg, #764ba2, #ffd700);
+            border: none;
             color: white;
-            font-size: 20px;
+            padding: 10px 18px;
+            border-radius: 12px;
             font-weight: bold;
             cursor: pointer;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
-            transition: transform 0.1s;
+            transition: all 0.3s;
         }
-        .touch-controls .ctrl-btn:active {
-            transform: scale(0.94);
+        .planet-toggle:hover {
+            transform: scale(1.05);
         }
-        .touch-controls .fire-btn {
-            flex: 1.2;
-        }
-        @media (pointer: coarse), (max-width: 768px) {
-            .touch-controls { display: flex; }
-        }
-        @media (max-width: 768px) {
-            body { padding: 10px; }
-            .container {
-                padding: 20px;
-                margin: 20px auto;
-                border-radius: 16px;
-            }
-            .navbar {
-                flex-wrap: wrap;
-                padding: 12px;
-                border-radius: 12px;
-            }
-            .nav-links {
-                flex-wrap: wrap;
-                gap: 10px;
-                margin: 10px 0 0 0;
-                width: 100%;
-            }
-            .weapons { flex-direction: column; }
-            .skills button { padding: 12px 4px; font-size: 14px; }
-            h1 { font-size: 26px; }
-            h2 { font-size: 20px; }
-            #game { height: 280px; }
+        #colorPlanet {
+            width: 120px;
+            height: 120px;
+            margin: 12px auto;
+            border-radius: 50%;
+            background: #667eea;
+            box-shadow: 0 0 25px rgba(102, 126, 234, 0.8);
+            transition: background 0.4s, box-shadow 0.4s;
         }
     </style>
 </head>
@@ -224,6 +191,10 @@
     <h2>🚀 星球游戏</h2>
     <p>欢迎来到风战队长的星球！在这里，你可以挑战星际迷宫、驾驶飞船穿越陨石带、收集能量星星！</p>
     <p>准备好了吗？向着星辰大海，出发吧！🌠</p>
+    <h2>🎨 星球变色魔法</h2>
+    <p>点击按钮，让这颗星球随机变身！</p>
+    <div id="colorPlanet"></div>
+    <p style="text-align:center;"><button class="planet-toggle" onclick="changeColor()">🔮 点我变星球！</button></p>
     <h2>🎮 点击星星得分</h2>
     <p>得分：<span id="score">0</span> 🌟</p>
     <button onclick="addScore()">⭐ 点我加1分！</button>
@@ -232,18 +203,13 @@
     <div id="game">
         <div id="ship">🚀</div>
     </div>
-    <p>得分：<span id="gameScore">0</span> | 生命：<span id="lives">3</span> ❤️</p>
+    <p>得分：<span id="gameScore">0</span> | 生命：<span id="lives">1000</span> ❤️</p>
     <div class="skills">
         <button id="skill1" onclick="useSkill(1)">🔥 激光风暴</button>
         <button id="skill2" onclick="useSkill(2)">💥 清屏冲击</button>
         <button id="skill3" onclick="useSkill(3)">❤️ 紧急修复</button>
     </div>
-    <div class="touch-controls" id="touchControls">
-        <button class="ctrl-btn" id="btnLeft">◀ 左移</button>
-        <button class="ctrl-btn" id="btnRight">右移 ▶</button>
-        <button class="ctrl-btn fire-btn" id="btnFire">🔫 发射</button>
-    </div>
-    <p id="gameMsg">← → 移动飞船，空格 发射激光，点击按钮释放技能！手机点下方按键即可操控。</p>
+    <p id="gameMsg">按 ↑ ↓ ← → 移动并转向火箭，按 A 键朝火箭方向发射激光，点击按钮释放技能！</p>
     <h2>⚔️ 武器库</h2>
     <div class="weapons">
         <div class="weapon-card">⚔️ 激光剑<br>一剑划破星河</div>
@@ -262,6 +228,13 @@
     </div>
     <script>
         let score = 0;
+        function changeColor() {
+            const planet = document.getElementById('colorPlanet');
+            const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#C780FA', '#FFD700'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            planet.style.background = randomColor;
+            planet.style.boxShadow = '0 0 25px ' + randomColor;
+        }
         function addScore() {
             score = score + 1;
             document.getElementById("score").textContent = score;
@@ -302,69 +275,66 @@
         const game = document.getElementById('game');
         const ship = document.getElementById('ship');
         let shipX = 50;
+        let shipY = 12;
+        let heading = 0;
+        const pressed = new Set();
         let score2 = 0;
-        let lives = 3;
+        let lives = 1000;
         let gameOver = false;
         const skillCd = [0, 0, 0];
         const SKILL_COOLDOWN = 10000;
 
         document.addEventListener('keydown', function (e) {
             if (gameOver) return;
-            if (e.key === 'ArrowLeft') moveShip(-5);
-            if (e.key === 'ArrowRight') moveShip(5);
-            if (e.key === ' ') {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                pressed.add(e.key);
+                e.preventDefault();
+            }
+            if (e.key === 'a' || e.key === 'A' || e.key === ' ') {
                 e.preventDefault();
                 fire();
             }
+            updateShip();
         });
 
-        function moveShip(delta) {
-            if (gameOver) return;
-            shipX = Math.max(5, Math.min(95, shipX + delta));
+        document.addEventListener('keyup', function (e) {
+            pressed.delete(e.key);
+            updateShip();
+        });
+
+        function updateShip() {
+            let dx = 0, dy = 0;
+            if (pressed.has('ArrowLeft')) dx -= 1;
+            if (pressed.has('ArrowRight')) dx += 1;
+            if (pressed.has('ArrowUp')) dy += 1;
+            if (pressed.has('ArrowDown')) dy -= 1;
+
+            shipX = Math.min(95, Math.max(5, shipX + dx * 5));
+            shipY = Math.min(80, Math.max(5, shipY + dy * 5));
+
+            // 朝向：八个方向 (45° 步进)
+            if (dy === 1 && dx === 0) heading = 0;       // ↑
+            else if (dy === 1 && dx === 1) heading = 45; // 右上
+            else if (dy === 0 && dx === 1) heading = 90; // →
+            else if (dy === -1 && dx === 1) heading = 135; // 右下
+            else if (dy === -1 && dx === 0) heading = 180; // ↓
+            else if (dy === -1 && dx === -1) heading = 225; // 左下
+            else if (dy === 0 && dx === -1) heading = 270; // ←
+            else if (dy === 1 && dx === -1) heading = 315; // 左上
+
+            ship.style.transform = 'rotate(' + heading + 'deg)';
             ship.style.left = shipX + '%';
+            ship.style.bottom = shipY + '%';
         }
-
-        // ===== 触屏控制（手机端虚拟按键） =====
-        function holdMove(delta) {
-            let timer = null;
-            function start() {
-                if (timer !== null) return;
-                moveShip(delta);
-                timer = setInterval(function () { moveShip(delta); }, 60);
-            }
-            function stop() {
-                if (timer !== null) {
-                    clearInterval(timer);
-                    timer = null;
-                }
-            }
-            return { start: start, stop: stop };
-        }
-        function bindHold(btn, hold) {
-            btn.addEventListener('pointerdown', function (e) {
-                e.preventDefault();
-                hold.start();
-            });
-            ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evt) {
-                btn.addEventListener(evt, hold.stop);
-            });
-        }
-        const btnLeft = document.getElementById('btnLeft');
-        const btnRight = document.getElementById('btnRight');
-        const btnFire = document.getElementById('btnFire');
-        bindHold(btnLeft, holdMove(-5));
-        bindHold(btnRight, holdMove(5));
-        btnFire.addEventListener('pointerdown', function (e) {
-            e.preventDefault();
-            fire();
-        });
 
         function fire() {
-            if (gameOver) return;
             const laser = document.createElement('div');
             laser.className = 'laser';
             laser.style.left = shipX + '%';
-            laser.style.bottom = '55px';
+            laser.style.bottom = (shipY + 8) + '%';
+            laser.vx = 0;           // 固定向上，不随火箭朝向
+            laser.vy = 1;
+            laser.style.transform = 'rotate(0deg)';
             game.appendChild(laser);
         }
 
@@ -394,18 +364,20 @@
             const lasers = document.querySelectorAll('.laser');
 
             lasers.forEach(laser => {
-                let bottom = parseFloat(laser.style.bottom) + 8;
-                laser.style.bottom = bottom + 'px';
-                if (bottom > game.clientHeight) laser.remove();
+                let left = parseFloat(laser.style.left);
+                let bottom = parseFloat(laser.style.bottom);
+                left += laser.vx * 1.2;
+                bottom += laser.vy * 1.2;
+                laser.style.left = left + '%';
+                laser.style.bottom = bottom + '%';
+                if (bottom < -10 || bottom > 110 || left < -10 || left > 110) {
+                    laser.remove();
+                }
             });
 
             aliens.forEach(alien => {
                 let top = parseFloat(alien.style.top || 0) + 2;
-                let left = parseFloat(alien.style.left);
-                if (left < shipX) left = Math.min(shipX, left + 0.5);
-                if (left > shipX) left = Math.max(shipX, left - 0.5);
                 alien.style.top = top + 'px';
-                alien.style.left = left + '%';
                 if (collide(alien, ship)) {
                     alien.remove();
                     hurtShip();
@@ -442,26 +414,35 @@
         }
 
         function skillLaserStorm() {
-            for (let i = -2; i <= 2; i++) {
-                const laser = document.createElement('div');
-                laser.className = 'laser';
-                laser.style.left = (shipX + i * 8) + '%';
-                laser.style.bottom = '55px';
-                game.appendChild(laser);
-            }
+            // 召唤风暴：击杀全场怪物
+            const aliens = document.querySelectorAll('.alien').length;
+            document.querySelectorAll('.alien').forEach(a => a.remove());
+            score2 += aliens;
+            document.getElementById('gameScore').textContent = score2;
+            ship.style.boxShadow = '0 0 30px 10px rgba(255, 217, 61, 0.8)';
+            setTimeout(() => { ship.style.boxShadow = ''; }, 600);
         }
 
         function skillClearScreen() {
+            // 清屏冲击：向前冲撞一段距离，将怪物击飞
+            const rad = heading * Math.PI / 180;
+            const dx = Math.sin(rad);
+            const dy = Math.cos(rad);
+            shipX = Math.min(95, Math.max(5, shipX + dx * 18));
+            shipY = Math.min(80, Math.max(5, shipY + dy * 18));
+            updateShip();
+            const hit = document.querySelectorAll('.alien').length;
             document.querySelectorAll('.alien').forEach(a => a.remove());
-            score2 += 3;
+            score2 += hit;
             document.getElementById('gameScore').textContent = score2;
+            ship.style.boxShadow = '0 0 30px 10px rgba(255, 217, 61, 0.8)';
+            setTimeout(() => { ship.style.boxShadow = ''; }, 600);
         }
 
         function skillRepair() {
-            if (lives < 3) {
-                lives++;
-                document.getElementById('lives').textContent = lives;
-            }
+            // 紧急修复：回复 100 点血量
+            lives = Math.min(1000, lives + 100);
+            document.getElementById('lives').textContent = lives;
         }
 
         function updateSkillUI() {
@@ -483,10 +464,38 @@
 
         function endGame(msg) {
             gameOver = true;
-            document.getElementById('gameMsg').textContent = msg + ' 得分：' + score2 + '。按 F5 重新开始！';
+            // 火箭被摧毁：场上怪物消失、火箭消失、播放游戏失败
+            document.querySelectorAll('.alien').forEach(a => a.remove());
+            ship.style.display = 'none';
+            const gameBox = document.getElementById('game');
+            gameBox.style.background = 'rgba(120, 10, 10, 0.55)';
+            document.getElementById('gameMsg').textContent = '❌ ' + msg + ' 得分：' + score2 + '。按 F5 重新开始！';
+            playFailSound();
+        }
+
+        function playFailSound() {
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                const ctx = new Ctx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 130;
+                gain.gain.value = 0.25;
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.frequency.setValueAtTime(130, ctx.currentTime + 0.2);
+                osc.frequency.setValueAtTime(95, ctx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                osc.stop(ctx.currentTime + 0.8);
+            } catch (e) {}
         }
 
         setInterval(spawnAlien, 1200);
+        updateShip();
         gameLoop();
     </script>
     </div>
