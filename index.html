@@ -112,6 +112,41 @@
             border-radius: 3px;
             box-shadow: 0 0 8px #ffd700;
         }
+        .boss {
+            position: absolute;
+            top: -80px;
+            font-size: 120px;
+            z-index: 2;
+            user-select: none;
+            filter: drop-shadow(0 0 18px rgba(255, 60, 60, 0.9));
+        }
+        .boss-shot {
+            position: absolute;
+            font-size: 26px;
+            z-index: 2;
+            user-select: none;
+            filter: drop-shadow(0 0 10px rgba(255, 60, 60, 0.9));
+        }
+        #bossBarWrap {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 280px;
+            height: 18px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 9px;
+            overflow: hidden;
+            z-index: 3;
+            display: none;
+        }
+        #bossBar {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #ff4b4b, #ff9d4b);
+            transition: width 0.2s;
+        }
         .skills {
             display: flex;
             gap: 10px;
@@ -153,6 +188,31 @@
             background: #667eea;
             box-shadow: 0 0 25px rgba(102, 126, 234, 0.8);
             transition: background 0.4s, box-shadow 0.4s;
+        }
+        #startOverlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 8, 30, 0.7);
+            border-radius: 15px;
+            z-index: 5;
+        }
+        .start-btn {
+            background: linear-gradient(90deg, #764ba2, #ffd700);
+            border: none;
+            color: white;
+            padding: 16px 34px;
+            border-radius: 14px;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 25px rgba(255, 217, 61, 0.6);
+            transition: all 0.3s;
+        }
+        .start-btn:hover {
+            transform: scale(1.08);
         }
     </style>
 </head>
@@ -201,6 +261,10 @@
     <p id="message">加油，风战队长！</p>
     <h2>🛡️ 星球保卫战</h2>
     <div id="game">
+        <div id="startOverlay">
+            <button class="start-btn" onclick="startGame()">🚀 开始游戏</button>
+        </div>
+        <div id="bossBarWrap"><div id="bossBar"></div></div>
         <div id="ship">🚀</div>
     </div>
     <p>得分：<span id="gameScore">0</span> | 生命：<span id="lives">1000</span> ❤️</p>
@@ -281,11 +345,24 @@
         let score2 = 0;
         let lives = 1000;
         let gameOver = false;
+        let started = false;
         const skillCd = [0, 0, 0];
         const SKILL_COOLDOWN = 10000;
+        // ===== 大 Boss =====
+        const BOSS_SPAWN_INTERVAL = 20000;  // 每 20 秒在场上生成一只 Boss
+        let bossSpawnTimer = null;          // Boss 生成定时器
+        let boss = null;            // Boss DOM 元素
+        let bossActive = false;
+        let bossHp = 0;
+        const BOSS_HP = 100;         // Boss 血量 100
+        const BOSS_SCORE = 30;      // 击杀 Boss 奖励分数
+        const BOSS_SHOT_INTERVAL = 5000;  // Boss 追踪弹发射间隔（毫秒），每 5 秒一颗
+        const BOSS_SHOT_DAMAGE = 20;     // 追踪弹每次伤害
+        let bossShots = [];         // 场上追踪弹
+        let bossShootTimer = 0;     // 上次发射时间戳
 
         document.addEventListener('keydown', function (e) {
-            if (gameOver) return;
+            if (gameOver || !started) return;
             if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
                 pressed.add(e.key);
                 e.preventDefault();
@@ -312,7 +389,7 @@
             shipX = Math.min(95, Math.max(5, shipX + dx * 5));
             shipY = Math.min(80, Math.max(5, shipY + dy * 5));
 
-            // 朝向：八个方向 (45° 步进)
+            // 朝向：记录移动方向供 「清屏冲撞」 技能朝前扑撞
             if (dy === 1 && dx === 0) heading = 0;       // ↑
             else if (dy === 1 && dx === 1) heading = 45; // 右上
             else if (dy === 0 && dx === 1) heading = 90; // →
@@ -322,7 +399,8 @@
             else if (dy === 0 && dx === -1) heading = 270; // ←
             else if (dy === 1 && dx === -1) heading = 315; // 左上
 
-            ship.style.transform = 'rotate(' + heading + 'deg)';
+            // 火箭造型始终固定朝上（垂直射击风格），方向键仅负责移动
+            ship.style.transform = 'rotate(0deg)';
             ship.style.left = shipX + '%';
             ship.style.bottom = shipY + '%';
         }
@@ -353,13 +431,13 @@
         }
 
         function hurtShip() {
-            lives--;
+            lives -= 10;   // 每次被怪物碰到掉 10 滴血
             document.getElementById('lives').textContent = lives;
             if (lives <= 0) endGame('💥 飞船被击毁！外星人入侵了！');
         }
 
         function gameLoop() {
-            if (gameOver) return;
+            if (gameOver || !started) return;
             const aliens = document.querySelectorAll('.alien');
             const lasers = document.querySelectorAll('.laser');
 
@@ -384,8 +462,8 @@
                     return;
                 }
                 if (top > game.clientHeight - 45) {
+                    // 怪物飞出屏幕底部：直接消失，不扣血（只有真正撞到飞船才掉血）
                     alien.remove();
-                    hurtShip();
                 }
             });
 
@@ -400,11 +478,75 @@
                 });
             });
 
+            // ===== Boss 逻辑 =====
+            if (bossActive && boss) {
+                // Boss 缓慢左右移动 + 缓慢下压逼近飞船
+                let bLeft = parseFloat(boss.style.left || 40) + boss.vx;
+                if (bLeft <= 6 || bLeft >= 84) boss.vx *= -1;
+                boss.style.left = bLeft + '%';
+                let bTop = parseFloat(boss.style.top || -80) + 0.3;
+                boss.style.top = bTop + 'px';
+
+                // 激光命中 Boss
+                lasers.forEach(laser => {
+                    if (boss && collide(boss, laser)) {
+                        laser.remove();
+                        hitBoss(1);
+                    }
+                });
+
+                // Boss 撞到飞船：掉血并反弹/击退
+                if (collide(boss, ship)) {
+                    hurtShip();
+                    boss.vx *= -1;
+                }
+
+                // Boss 周期发射追踪弹
+                if (Date.now() - bossShootTimer > BOSS_SHOT_INTERVAL) {
+                    bossShootTimer = Date.now();
+                    const shot = document.createElement('div');
+                    shot.className = 'boss-shot';
+                    shot.textContent = '💥';
+                    shot.style.left = (parseFloat(boss.style.left) + 5) + '%';
+                    shot.style.top = (parseFloat(boss.style.top) + 60) + 'px';
+                    game.appendChild(shot);
+                    bossShots.push(shot);
+                }
+            }
+
+            // 追踪弹：朝飞船当前位置飞行，命中飞船扣血
+            bossShots.forEach(shot => {
+                if (!shot.isConnected) return;
+                let sl = parseFloat(shot.style.left);
+                let st = parseFloat(shot.style.top);
+                const dx = shipX - sl;
+                const dy = (game.clientHeight * (100 - shipY) / 100) - st;
+                const dist = Math.hypot(dx, dy) || 1;
+                const step = 3;
+                shot.style.left = (sl + dx / dist * step) + '%';
+                shot.style.top = (st + dy / dist * step) + 'px';
+                if (collide(shot, ship)) {
+                    shot.remove();
+                    hurtBossShot();
+                } else if (st < -40 || st > game.clientHeight + 40 || sl < -10 || sl > 110) {
+                    // 追踪弹飞出边界：清除，避免滞留
+                    shot.remove();
+                }
+            });
+            bossShots = bossShots.filter(s => s.isConnected);
+
             requestAnimationFrame(gameLoop);
         }
 
+        function hurtBossShot() {
+            // 追踪弹命中飞船：扣血并清除对应弹体
+            lives -= BOSS_SHOT_DAMAGE;
+            document.getElementById('lives').textContent = lives;
+            if (lives <= 0) endGame('💥 飞船被 BOSS 的追踪弹击毁！');
+        }
+
         function useSkill(n) {
-            if (gameOver) return;
+            if (gameOver || !started) return;
             const now = Date.now();
             if (now - skillCd[n - 1] < SKILL_COOLDOWN) return;
             skillCd[n - 1] = now;
@@ -413,11 +555,61 @@
             if (n === 3) skillRepair();
         }
 
+        // ===== 大 Boss 相关 =====
+        function trySpawnBoss() {
+            // 每 20 秒定时调用：场上没 Boss 且游戏在进行时生成一只
+            if (!bossActive && started && !gameOver) {
+                spawnBoss();
+            }
+        }
+
+        function spawnBoss() {
+            boss = document.createElement('div');
+            boss.className = 'boss';
+            boss.textContent = '👹';
+            boss.style.left = '40%';
+            boss.style.top = '-80px';
+            boss.vx = 0.5;      // 左右漂移速度
+            game.appendChild(boss);
+            bossActive = true;
+            bossHp = BOSS_HP;
+            bossShootTimer = Date.now();   // 登场后过 5 秒才发射第一颗追踪弹
+            updateBossBar();
+            document.getElementById('bossBarWrap').style.display = 'block';
+        }
+
+        function updateBossBar() {
+            const bar = document.getElementById('bossBar');
+            const pct = Math.max(0, bossHp / BOSS_HP * 100);
+            bar.style.width = pct + '%';
+        }
+
+        function hitBoss(amount) {
+            if (!bossActive) return;
+            bossHp -= amount;
+            updateBossBar();
+            if (bossHp <= 0) killBoss();
+        }
+
+        function killBoss() {
+            if (boss) boss.remove();
+            boss = null;
+            bossActive = false;
+            bossHp = 0;
+            // 清除场上追踪弹
+            bossShots.forEach(s => s.remove());
+            bossShots = [];
+            document.getElementById('bossBarWrap').style.display = 'none';
+            score2 += BOSS_SCORE;
+            document.getElementById('gameScore').textContent = score2;
+        }
+
         function skillLaserStorm() {
             // 召唤风暴：击杀全场怪物
             const aliens = document.querySelectorAll('.alien').length;
             document.querySelectorAll('.alien').forEach(a => a.remove());
             score2 += aliens;
+            if (bossActive) killBoss();   // 召唤风暴也可击毙 Boss（killBoss 内已加分）
             document.getElementById('gameScore').textContent = score2;
             ship.style.boxShadow = '0 0 30px 10px rgba(255, 217, 61, 0.8)';
             setTimeout(() => { ship.style.boxShadow = ''; }, 600);
@@ -434,6 +626,7 @@
             const hit = document.querySelectorAll('.alien').length;
             document.querySelectorAll('.alien').forEach(a => a.remove());
             score2 += hit;
+            if (bossActive) killBoss();   // 清屏冲击也可击毙 Boss
             document.getElementById('gameScore').textContent = score2;
             ship.style.boxShadow = '0 0 30px 10px rgba(255, 217, 61, 0.8)';
             setTimeout(() => { ship.style.boxShadow = ''; }, 600);
@@ -466,10 +659,19 @@
             gameOver = true;
             // 火箭被摧毁：场上怪物消失、火箭消失、播放游戏失败
             document.querySelectorAll('.alien').forEach(a => a.remove());
+            if (boss) boss.remove();
+            boss = null;
+            bossActive = false;
+            bossHp = 0;
+            bossShots.forEach(s => s.remove());
+            bossShots = [];
+            document.getElementById('bossBarWrap').style.display = 'none';
             ship.style.display = 'none';
             const gameBox = document.getElementById('game');
             gameBox.style.background = 'rgba(120, 10, 10, 0.55)';
-            document.getElementById('gameMsg').textContent = '❌ ' + msg + ' 得分：' + score2 + '。按 F5 重新开始！';
+            document.getElementById('gameMsg').textContent = '❌ ' + msg + ' 得分：' + score2 + '。';
+            // 失败后重新显示开始按钮，方便重开
+            document.getElementById('startOverlay').style.display = 'flex';
             playFailSound();
         }
 
@@ -494,9 +696,41 @@
             } catch (e) {}
         }
 
-        setInterval(spawnAlien, 1200);
-        updateShip();
-        gameLoop();
+        function startGame() {
+            // 点击「开始游戏」后真正启动
+            document.getElementById('startOverlay').style.display = 'none';
+            const gameBox = document.getElementById('game');
+            gameBox.style.background = 'rgba(0, 0, 0, 0.3)';
+            document.getElementById('gameMsg').textContent = '火箭已出发！按 ↑ ↓ ← → 移动，按 A 发射激光，点击按钮释放技能！';
+            gameOver = false;
+            started = true;
+            lives = 1000;
+            score2 = 0;
+            // 重置 Boss 状态
+            if (boss) boss.remove();
+            boss = null;
+            bossActive = false;
+            bossHp = 0;
+            bossShots.forEach(s => s.remove());
+            bossShots = [];
+            bossShootTimer = 0;
+            document.getElementById('bossBarWrap').style.display = 'none';
+            // 每 20 秒生成一只 Boss
+            if (bossSpawnTimer) clearInterval(bossSpawnTimer);
+            bossSpawnTimer = setInterval(trySpawnBoss, BOSS_SPAWN_INTERVAL);
+            document.getElementById('lives').textContent = lives;
+            document.getElementById('gameScore').textContent = 0;
+            ship.style.display = 'block';
+            shipX = 50;
+            shipY = 12;
+            updateShip();
+            if (spawnTimer) clearInterval(spawnTimer);
+            spawnTimer = setInterval(spawnAlien, 1200);
+            gameLoop();
+        }
+
+        // 默认不自动启动游戏，等待玩家点击「开始游戏」
+        let spawnTimer = null;
     </script>
     </div>
 </body>
